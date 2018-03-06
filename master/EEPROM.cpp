@@ -24,7 +24,7 @@ public:
 	d1 - tentativa de escrever em uma posição inacessivel (sem permissao ou maior que a memoria)
 	d0 - tentativa de acessar uma posição inacessivel (sem permissao ou maior que a memoria)
 	*/
-	/* bytes reservados
+	/* bytes reservados no inicio da eeprom, protegidos de overwriting.
 	0x00 mempos[1]
 	0x01 mempos[0]
 	0x02 err
@@ -34,8 +34,8 @@ public:
 	#define to0x0B 'e'
 	#define to0x0C 's'
 	#define to0x0D 'w'
-	#define to0x0E 0xFF
-	#define to0x0F 0x0A // \n
+	#define to0x0E 0xFF	//livre
+	#define to0x0F 0xFF	//livre
 	//agr vem o resto
 	#define operationdelay 5			//tempo minimo de espera entre operações
 	#define reserved 3				//numero de bytes reservados no começo da memoria
@@ -43,50 +43,50 @@ public:
 	#define memorysize 32768			//tamanho da memoria em bytes
 	uint16_t memcount;				//variavel auxiliar para esctira
 	uint8_t err;					//log de erros
-	clock_t lastcall;
+	clock_t lastcall;				//guarda a ultima vez que uma operação da eeprom foi chamada
 	void delayquepresta(uint16_t dms){		//em decimo de ms. _delay_ms requer variavel definida no tempo de compilação
 		while(dms!=0){
 			_delay_us(100);
 			dms--;
 		}
 	}
-	void mindelay(uint32_t delay, clock_t lasttime){//delay relativo
-		if(((1000*(clock()-lasttime)/CLOCKS_PER_SEC) < delay) && (clock()>lasttime)){
-			delayquepresta(delay - ((10000*(clock()-lasttime))/CLOCKS_PER_SEC));
+	void mindelay(uint32_t delay, clock_t lasttime){	//delay relativo
+		if(((1000*(clock()-lasttime)/CLOCKS_PER_SEC) < delay) && (clock()>lasttime)){	//verifica se o delay demora mais do que 100us alem do momento da vrificação e se n deu overflow(?)
+			delayquepresta(delay - ((10000*(clock()-lasttime))/CLOCKS_PER_SEC));	//acho que esse 10000 ta errado...
 		}
 	}
 	typedef union{						//union para auxiliar na quebra do endereço principal da memoria
-		uint16_t full;
-		uint8_t half[2];
+		uint16_t full;					//usa o full pra salvar o dado inteiro
+		uint8_t half[2];				//dps le as metades :)
 	}memdiv;
 	memdiv mempos;						//aponta para a posição principal na eeprom
 	memdiv temppos;						//aponta para uma posição temporaria na eeprom
 	void gotobyte(uint16_t x){				//move o ponto em que estão sendo salvos os dados na eeprom
 		if((x < memorysize) && (x > reserved)){
-			mempos.full= x;
+			mempos.full= x;				//atualiza a posição do ponteiro
 		}
 		else{
-			err=err | 0x01;
+			err=err | 0x01;				//seta o bit de erro d1
 		}
 	}
 	void writebyte(uint8_t data, uint16_t pos){		//escreve um unico byte na posiçao especificada, sem restrições
-		if(pos < memorysize){
-			mindelay(operationdelay, lastcall);
-			temppos.full=pos;
+		if(pos < memorysize){				//verifica se a posição ta dentro da memoria
+			mindelay(operationdelay, lastcall);	//aguarda o tempo necessario pra dar o define "operationdelay", caso necessario 
+			temppos.full = pos;			//atualiza a posição temporaria de escrita para o byte
 			Wire.beginTransmission(0b10100000);
 			Wire.write(temppos.half[1]);
 			Wire.write(temppos.half[0]);
 			Wire.write(data);
 			Wire.endTransmission();
-			lastcall= clock();
+			lastcall = clock();			//atualiza o tempo da ultima chamada de escrita ou leitura na eeprom
 		}
 		else{
-			err=err | 0x02;
+			err=err | 0x02;				//seta o bit de erro d2
 		}
 	}
 	uint8_t readbyte(uint16_t pos){				//le um unico byte na posição especificada, sem restrições
-		if(pos < memorysize){
-			Wire.beginTransmission(0b10100000);
+		if(pos < memorysize){				//verifica se a posição ta dentro da memoria
+			Wire.beginTransmission(0b10100000);	//essa porra ta toda errada
 			Wire.write(temppos.half[1]);
 			Wire.write(temppos.half[0]);
 			Wire.endTransmission(0);
@@ -99,38 +99,38 @@ public:
 		return 0;
 	}
 	void init(void){					//inicializa a memoria (favor usar apenas uma vez), e checa se houve um desligamento inesperado
-		mempos.half[1]=readbyte(0x00);
-		mempos.half[0]=readbyte(0x01);
-		err=readbyte(0x02);
-		if(mempos.full==0){
-			mempos.full= reserved;
-			err= 0;
-			memcount= 0;
+		mempos.half[1] = readbyte(0x00);		//le a ultima posição salva do ponteiro de escrita da eeprom
+		mempos.half[0] = readbyte(0x01);		//le a ultima posição salva do ponteiro de escrita da eeprom
+		err = readbyte(0x02);				//carrega o log de erros da eeprom pra ram
+		if(mempos.full == 0){				//se a ultima posição de escrita for 0 o log de erros é limpo, 
+			mempos.full = reserved;			//joga o ponteiro de escrita para 1 byte dps da quantidade reservada (LEMBRANDO QUE A INDEXAÇÂO COMEÇA DO 0)
+			err = 0;				//limpa o log de erros
+			memcount = 0;				//limpa a quantidade de coisas escritas (var auxiliar)
 		}
 		else{
-			err=err | 0x80;
+			err=err | 0x80;				//seta o bit de erro d7 (desligamento inesperado)
 		}
 	}
 	void writestring(char *data){				//escreve uma string na eeprom
-		uint16_t offset=0;
-		uint8_t temcoisa=1;
-		while(temcoisa){
-			memcount=0;
-			mindelay(operationdelay, lastcall);
-			Wire.beginTransmission(0b10100000);
+		uint16_t offset=0;				//variavel pra caso venha mais q uma pagina (64bytes)
+		uint8_t temcoisa=1;				//tem coisa
+		while(temcoisa){				//escrevendo a string
+			memcount=0;				//zera o numero de BYTES escritos
+			mindelay(operationdelay, lastcall);	//garante o delay minimo caso necessario
+			Wire.beginTransmission(0b10100000);	//chama a biblioteca wire
 			Wire.write(mempos.half[1]);
 			Wire.write(mempos.half[0]);
-			while(temcoisa && (memcount != 64)){
-				Wire.write(data[memcount+offset]);
-				if(data[memcount+offset]='\0'){
-					temcoisa=0;
+			while(temcoisa && (memcount != 64)){		//escrevendo a pagina
+				Wire.write(data[memcount+offset]);	//escreve na eeprom o dado + offset
+				if(data[memcount+offset]='\0'){		//se acabar a string para de escrever
+					temcoisa=0;			//acabou a coisa
 				}
-				memcount++;
+				memcount++;				//incrementa o numero de coisas escritas
 			}
 			Wire.endTransmission();
-			lastcall= clock();
-			offset+=memcount;
-			mempos.full+=memcount;
+			lastcall = clock();			//atualiza a ultima chamada de escrita | leitura
+			offset += memcount;			//atualiza o offset da leitura da string
+			mempos.full += memcount;		//atualiza o ponteiro de escrita
 		}
 	}
 	void readpage(uint16_t pos, char *buffer){		//escreve uma string na eeprom
@@ -205,7 +205,6 @@ public:
 			else {
 				err = 0x40;
 			}
-			//printf("%c %x %d\n", out[outpos], out[outpos], esquerda);
 			pos++;
 			if (!esquerda) {
 				outpos++;
@@ -219,11 +218,9 @@ public:
 		uint8_t temcoisa = 1;
 		while ((inp[pos] != '\0') &&  (temcoisa)) {
 			out[outpos] = (inp[pos] & 0xF0) >> 4;
-			//printf("%c %x %d\n", out[outpos], out[outpos], 4);
 			outpos++;
 			if ((inp[pos] & 0x0F) != '\0') {
 				out[outpos] = inp[pos] & 0x0F;
-				//printf("%c %x %d\n", out[outpos], out[outpos], 0);
 				outpos++;
 			}
 			else {
