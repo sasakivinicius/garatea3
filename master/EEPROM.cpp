@@ -10,8 +10,8 @@ class eeprom {
       d7 - desligamento inesperado do sistema
       d6 - letra nao premitida durante compressão
       d5 - letra nao premitida durante descompressão
-      d4 -
-      d3 -
+      d4 - memoria cheia
+      d3 - leu ate o fim
       d2 - tentativa de ler em uma posição inacessivel (sem permissao ou maior que a memoria)
       d1 - tentativa de escrever em uma posição inacessivel (sem permissao ou maior que a memoria)
       d0 - tentativa de acessar uma posição inacessivel (sem permissao ou maior que a memoria)
@@ -98,7 +98,7 @@ class eeprom {
     void writestring(char *data, uint8_t mode) {          //escreve uma string na eeprom. Use mode = 1 para strings comprimidas e 0 para strings normais
       uint16_t offset = 0;                  //variavel pra caso venha mais q uma pagina (64bytes)
       uint8_t temcoisa = 1;                 //tem coisa
-      while (temcoisa) {                    //escrevendo a string
+      while ( temcoisa && ( mempos.full != memorysize ) ) {                    //escrevendo a string
         memcount = 0;                       //zera o numero de BYTES escritos
         delay(5);                           //garante o delay minimo caso necessario
         Wire.beginTransmission(id);         //chama a biblioteca wire
@@ -115,6 +115,7 @@ class eeprom {
           memcount++;                               //incrementa o numero de coisas escritas
           if ( ( mempos.full + memcount ) == memorysize ){
             temcoisa = 0;
+            err = err | 0x10;
           }
           if (((memcount + mempos.full) % 64) == 0 || memcount == 30 ) {
             break;
@@ -129,7 +130,7 @@ class eeprom {
       uint16_t offset = 0;
       uint8_t temcoisa = 1;
       temppos.full = pos;
-      while (temcoisa) {
+      while (temcoisa && ( temppos.full != memorysize )) {
         memcount = 0;
         delay(5);
         Wire.beginTransmission(id);
@@ -148,6 +149,7 @@ class eeprom {
           memcount++;
           if ( ( temppos.full + memcount ) == memorysize ){
             temcoisa = 0;
+            err = err | 0x08;
           }
           if (((memcount + temppos.full) % 64) == 0 || memcount == 32) {
             break;
