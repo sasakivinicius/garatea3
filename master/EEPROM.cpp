@@ -4,10 +4,6 @@
    Created: 20/10/2017 16:23:50
    Author : Boludo
 */
-
-#include <inttypes.h>
-#include <Wire.h>
-#include <string.h>
 class eeprom {
   public:
     /* error id
@@ -26,11 +22,11 @@ class eeprom {
       0x02 err
     */
     //ziptable          //tabela de compactação (pode colocar char)
-#define to0x0B 'n'
-#define to0x0C 'e'
-#define to0x0D 's'
-#define to0x0E 'w'
-#define to0x0F 'x'
+    #define to0x0B 'n'
+    #define to0x0C 'e'
+    #define to0x0D 's'
+    #define to0x0E 'w'
+    #define to0x0F 'x'
     //agr vem o resto
     #define operationdelay 50   //tempo minimo de espera entre operações
     #define reserved 3              //numero de bytes reservados no começo da memoria
@@ -99,7 +95,7 @@ class eeprom {
         err = err | 0x80;                   //seta o bit de erro d7 (desligamento inesperado)
       }
     }
-    void writestring(char *data, uint8_t mode) {          //escreve uma string na eeprom
+    void writestring(char *data, uint8_t mode) {          //escreve uma string na eeprom. Use mode = 1 para strings comprimidas e 0 para strings normais
       uint16_t offset = 0;                  //variavel pra caso venha mais q uma pagina (64bytes)
       uint8_t temcoisa = 1;                 //tem coisa
       while (temcoisa) {                    //escrevendo a string
@@ -129,7 +125,7 @@ class eeprom {
         mempos.full += memcount;                    //atualiza o ponteiro de escrita
       }
     }
-    uint16_t readstring(uint16_t pos, char *bufferr, uint8_t mode) {  //escreve uma string na eeprom
+    uint16_t readstring(uint16_t pos, char *bufferr, uint8_t mode) {  //escreve uma string na eeprom. Use mode = 1 para strings comprimidas e 0 para strings normais
       uint16_t offset = 0;
       uint8_t temcoisa = 1;
       temppos.full = pos;
@@ -273,91 +269,3 @@ class eeprom {
       return outpos;
     }
 } eeprom;
-void setup() {
-  delay(3000);
-  Wire.begin();
-  Serial.begin(9600);
-  while (!Serial) {
-    ;
-  }
-  Serial.println("OK0");
-  eeprom.switchto(0);
-  eeprom.resetlogs();
-  //Serial.println("OK1");
-  Serial.println(eeprom.readbyte(0));
-  Serial.println(eeprom.readbyte(1));
-  Serial.println(eeprom.readbyte(2));
-  //Serial.println(char(eeprom.readbyte(3)));
-  eeprom.init(0);
-  //Serial.println("OK2");
-  //delay(500);
-  eeprom.mempos.full = 3;
-  char otherstring[240] = "s556w7788n90011s2334ew5n677889xx";
-  //char otherstring[240] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyx1234567890!@#$%¨&*()hahaha nao sei mais o que falar mas ainda estou digitando apenas para testar essa eeprom mas que saco enfim to so enchendo linguica ... aff ... bip bop puf til";
-  //char otherstring2[240] = "Essa outra string aqui tem um monte de letra so pra tentar sobreescrever aquela string que tava aqui antes de tudo isso acontecer mas que acabou acontecendo infelizmente e eu ja nem sei mais o que eu to digitando nesse trecho de texto";
-  char otherstring2[240];
-  uint16_t ptr;
-  char str[240];
-  uint16_t aux = 0;
-  //delay(500);
-  //Serial.println("OK3");
-  eeprom.zipstring(otherstring, otherstring2);
-  eeprom.writestring(otherstring2, 1);
-  //delay(30);
-  //eeprom.writestring(otherstring);
-  //Serial.println("OK4");
-  //delay(5);
-  eeprom.updatelogs();
-  Serial.println(eeprom.readbyte(0));
-  Serial.println(eeprom.readbyte(1));
-  Serial.println(eeprom.readbyte(2));
-  ptr = eeprom.readstring(3, otherstring2, 1);
-  eeprom.unzipstring(otherstring2, str);
-  //Serial.println("OK5");
-  while (aux != 240) {
-    //Serial.print(char(eeprom.readbyte(aux)));
-    if (str[aux] == '\0') {
-      break;
-    }
-    Serial.print(char(str[aux]));
-    if ((aux + 1) % 32 == 0) {
-      Serial.println(' ');
-    }
-    aux++;
-  }
-  //delay(50);
-  strcpy(otherstring, "swswswswswsw5254325432543");
-  eeprom.writestring(otherstring, 0);
-  //delay(50);
-  ptr = eeprom.readstring(ptr, str, 0);
-  aux = 0;
-  while (aux != 240) {
-    //Serial.print(char(eeprom.readbyte(aux)));
-    if (str[aux] == '\0') {
-      break;
-    }
-    Serial.print((str[aux]));
-    if ((aux + 1) % 32 == 0) {
-      Serial.println(' ');
-    }
-    aux++;
-  }/*
-  Serial.println(' ');
-  Serial.println("----");
-  Serial.println(' ');
-  aux = 0;
-  while (aux != 80) {
-    Serial.print(char(eeprom.readbyte(aux)));
-    /*if (str[aux] == '\0') {
-      break;
-    }
-    Serial.print((str[aux]));*//*
-    if ((aux + 1) % 32 == 0) {
-      Serial.println(' ');
-    }
-    aux++;
-  }*/
-  while (1) {
-    delay(5000);
-  }
-}
